@@ -34,6 +34,7 @@ type OptionInstruments struct {
 }
 
 type OptionGreek struct {
+	InstrumentID        string   `json:"instrument_id"`
 	Strike              float64  `json:"strike"`
 	Type                string   `json:"type"`
 	Bid                 *float64 `json:"bid"`
@@ -278,6 +279,7 @@ func (c *Client) GetOptionGreeks(symbol, expirationDate, optionType, side string
 				continue
 			}
 			combined = append(combined, OptionGreek{
+				InstrumentID:        r.InstrumentID,
 				Strike:              inst.StrikePrice,
 				Type:                inst.Type,
 				Bid:                 optFloat(r.BidPrice),

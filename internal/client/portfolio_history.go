@@ -68,12 +68,21 @@ func (c *Client) GetPortfolioHistory(accountNumber, span, interval string) (*Por
 		}
 	}
 	var raw portfolioHistoricalRaw
-	if err := c.GetJSON(URL("/portfolios/historicals/"+accountNumber+"/", map[string]string{
+	err := c.GetJSON(URL("/portfolios/historicals/"+accountNumber+"/", map[string]string{
 		"span":     span,
 		"interval": interval,
 		"bounds":   "regular",
-	}), &raw); err != nil {
-		return nil, err
+	}), &raw)
+	if err != nil {
+		// Robinhood migrated this to a rosetta-backed endpoint that no
+		// longer accepts span/interval via the public API and refuses
+		// per-account calls on retirement accounts. Give the caller a
+		// clear message instead of a naked 404 so they know it's not a
+		// local bug.
+		return nil, errMsg("account history endpoint has been removed by Robinhood " +
+			"(was /portfolios/historicals/<account>/). Workaround: use " +
+			"`rh account snapshot` for current equity and reconstruct " +
+			"the curve from `rh transfers` + `rh activity` + `rh dividends`.")
 	}
 
 	points := make([]PortfolioPoint, 0, len(raw.EquityHistoricals))

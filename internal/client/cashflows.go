@@ -126,8 +126,34 @@ func (c *Client) GetDividends(since string, limit int) (*DividendsResult, error)
 }
 
 func (c *Client) pageDividends(maxRows int, since time.Time) ([]dividendRaw, error) {
+	// Robinhood's /dividends/ silently defaults to the primary account.
+	// Fan out across every account the user owns so IRA dividends are
+	// included.
+	accounts, err := c.ListAccountNumbers()
+	if err != nil || len(accounts) == 0 {
+		return c.pageDividendsSingle(maxRows, since, "")
+	}
+	var combined []dividendRaw
+	for _, acct := range accounts {
+		rows, err := c.pageDividendsSingle(maxRows, since, acct)
+		if err != nil {
+			return nil, err
+		}
+		combined = append(combined, rows...)
+		if len(combined) >= maxRows {
+			break
+		}
+	}
+	return combined, nil
+}
+
+func (c *Client) pageDividendsSingle(maxRows int, since time.Time, account string) ([]dividendRaw, error) {
 	out := []dividendRaw{}
-	u := URL("/dividends/", nil)
+	q := map[string]string{}
+	if account != "" {
+		q["account_numbers"] = account
+	}
+	u := URL("/dividends/", q)
 	for u != "" && len(out) < maxRows {
 		var page dividendsResp
 		if err := c.GetJSON(u, &page); err != nil {
@@ -319,7 +345,11 @@ func (c *Client) GetRecurring() (*RecurringResult, error) {
 	for u != "" {
 		var page recurringRaw
 		if err := c.GetJSON(u, &page); err != nil {
-			return nil, err
+			return nil, errMsg("recurring investments endpoint has been removed by " +
+				"Robinhood (was /recurring/configurations/). DCA configs are " +
+				"now visible in-app only; no public replacement has been " +
+				"discovered. Check the Robinhood app under Account → " +
+				"Recurring Investments.")
 		}
 		for _, r := range page.Results {
 			sym := r.InvestmentTarget.Symbol

@@ -168,18 +168,19 @@ type watchlistsRaw struct {
 
 type watchlistItemsRaw struct {
 	Results []struct {
-		Object struct {
-			Symbol string `json:"symbol"`
-			ID     string `json:"id"`
-		} `json:"object"`
+		Symbol    string `json:"symbol"`
+		ObjectID  string `json:"object_id"`
 		CreatedAt string `json:"created_at"`
 	} `json:"results"`
 	Next string `json:"next"`
 }
 
 func (c *Client) ListWatchlists() (*WatchlistsResult, error) {
+	// Robinhood's list endpoint now requires `owner_type`. "custom" matches
+	// user-created watchlists (and some Robinhood-provided ones the user
+	// follows) which is what the previous behavior intended.
 	var raw watchlistsRaw
-	if err := c.GetJSON(URL("/midlands/lists/", nil), &raw); err != nil {
+	if err := c.GetJSON(URL("/midlands/lists/", map[string]string{"owner_type": "custom"}), &raw); err != nil {
 		return nil, err
 	}
 	out := make([]Watchlist, 0, len(raw.Results))
@@ -199,7 +200,7 @@ func (c *Client) ShowWatchlist(name string) (*Watchlist, error) {
 	}
 	// Find the list ID by name.
 	var raw watchlistsRaw
-	if err := c.GetJSON(URL("/midlands/lists/", nil), &raw); err != nil {
+	if err := c.GetJSON(URL("/midlands/lists/", map[string]string{"owner_type": "custom"}), &raw); err != nil {
 		return nil, err
 	}
 	listID := ""
@@ -228,8 +229,8 @@ func (c *Client) ShowWatchlist(name string) (*Watchlist, error) {
 		}
 		for _, it := range page.Results {
 			items = append(items, WatchlistItem{
-				Symbol:       it.Object.Symbol,
-				InstrumentID: it.Object.ID,
+				Symbol:       it.Symbol,
+				InstrumentID: it.ObjectID,
 				CreatedAt:    it.CreatedAt,
 			})
 		}

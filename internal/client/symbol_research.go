@@ -249,26 +249,82 @@ type SimilarResult struct {
 	Similar   []SimilarStock `json:"similar"`
 }
 
-type similarRaw struct {
-	SimilarStocks []struct {
-		Symbol       string `json:"symbol"`
-		InstrumentID string `json:"instrument_id"`
-	} `json:"similar_stocks"`
+type tagInstrumentsRaw struct {
+	Tags []struct {
+		Slug        string   `json:"slug"`
+		Name        string   `json:"name"`
+		Instruments []string `json:"instruments"`
+	} `json:"tags"`
 }
 
+// GetSimilar returns up to 20 peer instruments derived from the tags the
+// target symbol shares on Robinhood's discovery taxonomy. The previous
+// /midlands/tags/similar/<id>/ endpoint was removed — tags are the closest
+// remaining replacement.
 func (c *Client) GetSimilar(symbol string) (*SimilarResult, error) {
 	symbol = strings.ToUpper(symbol)
 	id, err := c.instrumentIDFor(symbol)
 	if err != nil {
 		return nil, err
 	}
-	var raw similarRaw
-	if err := c.GetJSON(URL("/midlands/tags/similar/"+id+"/", nil), &raw); err != nil {
+	var raw tagInstrumentsRaw
+	if err := c.GetJSON(URL("/midlands/tags/instrument/"+id+"/", nil), &raw); err != nil {
 		return nil, err
 	}
-	out := make([]SimilarStock, 0, len(raw.SimilarStocks))
-	for _, s := range raw.SimilarStocks {
-		out = append(out, SimilarStock{Symbol: s.Symbol})
+
+	// Collect peer instrument URLs, tagged with the first category they
+	// appear in. Skip this symbol and generic popularity tags ("100 Most
+	// Popular" / "upcoming-earnings") which are noise.
+	const skipSlug = "100-most-popular"
+	tagByURL := map[string]string{}
+	order := []string{}
+	for _, t := range raw.Tags {
+		if t.Slug == skipSlug || strings.HasPrefix(t.Slug, "upcoming-") {
+			continue
+		}
+		for _, iURL := range t.Instruments {
+			instID := lastPathSegment(strings.TrimSuffix(iURL, "/"))
+			if instID == id || instID == "" {
+				continue
+			}
+			if _, seen := tagByURL[instID]; !seen {
+				tagByURL[instID] = t.Name
+				order = append(order, instID)
+			}
+		}
+	}
+	// Cap to keep the payload useful, not overwhelming.
+	const max = 20
+	if len(order) > max {
+		order = order[:max]
+	}
+
+	// Batch-resolve instrument IDs → symbols.
+	symbols := map[string]string{}
+	const batch = 50
+	for start := 0; start < len(order); start += batch {
+		end := start + batch
+		if end > len(order) {
+			end = len(order)
+		}
+		var resp instrumentsExtResp
+		if err := c.GetJSON(URL("/instruments/", map[string]string{
+			"ids": strings.Join(order[start:end], ","),
+		}), &resp); err != nil {
+			return nil, err
+		}
+		for _, inst := range resp.Results {
+			symbols[inst.ID] = inst.Symbol
+		}
+	}
+
+	out := make([]SimilarStock, 0, len(order))
+	for _, instID := range order {
+		sym := symbols[instID]
+		if sym == "" {
+			continue
+		}
+		out = append(out, SimilarStock{Symbol: sym, Tag: tagByURL[instID]})
 	}
 	return &SimilarResult{Symbol: symbol, Count: len(out), Similar: out}, nil
 }

@@ -8,11 +8,11 @@ import (
 // --- documents (1099 etc) ---
 
 type Document struct {
-	ID         string `json:"id"`
-	Type       string `json:"type"`
-	DisplayDate string `json:"display_date"`
-	URL        string `json:"download_url"`
-	Account    string `json:"account,omitempty"`
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Date    string `json:"date"`
+	URL     string `json:"download_url"`
+	Account string `json:"account,omitempty"`
 }
 
 type DocumentsResult struct {
@@ -24,7 +24,8 @@ type docsRaw struct {
 	Results []struct {
 		ID          string `json:"id"`
 		Type        string `json:"type"`
-		DisplayDate string `json:"display_date"`
+		// API field is `date` (YYYY-MM-DD), not `display_date`.
+		Date        string `json:"date"`
 		DownloadURL string `json:"download_url"`
 		URL         string `json:"url"`
 		Account     string `json:"account"`
@@ -32,6 +33,11 @@ type docsRaw struct {
 	Next string `json:"next"`
 }
 
+// GetDocuments lists account documents. `taxYear` filters to documents
+// dated within that calendar year. The `tax_year` query param is still
+// sent for forward compatibility, but the upstream API currently ignores
+// it — so the filter is applied client-side against each document's
+// `date` field (the actual RH field name; `display_date` does not exist).
 func (c *Client) GetDocuments(taxYear int) (*DocumentsResult, error) {
 	out := []Document{}
 	q := map[string]string{}
@@ -45,16 +51,19 @@ func (c *Client) GetDocuments(taxYear int) (*DocumentsResult, error) {
 			return nil, err
 		}
 		for _, r := range page.Results {
+			if taxYear > 0 && !strings.HasPrefix(r.Date, strconv.Itoa(taxYear)) {
+				continue
+			}
 			dl := r.DownloadURL
 			if dl == "" {
 				dl = r.URL
 			}
 			out = append(out, Document{
-				ID:          r.ID,
-				Type:        r.Type,
-				DisplayDate: r.DisplayDate,
-				URL:         dl,
-				Account:     r.Account,
+				ID:      r.ID,
+				Type:    r.Type,
+				Date:    r.Date,
+				URL:     dl,
+				Account: r.Account,
 			})
 		}
 		u = page.Next
