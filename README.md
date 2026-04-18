@@ -33,10 +33,26 @@ tokens stored locally in `~/.robinhood-cli/credentials.json`.
 
 ## Install
 
-Requires Go ≥ 1.25.
+### Option 1: pre-built binary (recommended)
+
+Grab the right archive for your machine from the
+[Releases page](https://github.com/JackZhao98/robinhood-cli/releases) — we
+publish for `darwin/arm64`, `darwin/amd64`, `linux/arm64`, `linux/amd64`,
+`windows/arm64`, `windows/amd64` on every tag.
 
 ```bash
-git clone https://github.com/jackzhao/robinhood-cli ~/Developer/Robinhood/robinhood-cli
+# example: macOS Apple Silicon
+TAG=v0.1.0
+curl -L "https://github.com/JackZhao98/robinhood-cli/releases/download/${TAG}/rh_${TAG#v}_darwin_arm64.tar.gz" \
+  | tar -xz -C ~/.local/bin rh
+chmod +x ~/.local/bin/rh
+rh --version
+```
+
+### Option 2: build from source (Go ≥ 1.25)
+
+```bash
+git clone https://github.com/JackZhao98/robinhood-cli ~/Developer/Robinhood/robinhood-cli
 cd ~/Developer/Robinhood/robinhood-cli
 go build -o ~/.local/bin/rh ./cmd/rh
 ```
@@ -231,6 +247,27 @@ Claude will call `rh` under the hood, parse the JSON, and summarize.
   to self-custody those are obviously invisible.
 - macOS-only build instructions above; the Go source has no platform
   dependencies, so `GOOS=linux go build` etc. work fine.
+
+## Releasing (maintainer notes)
+
+Tagging a `v*` commit triggers `.github/workflows/release.yml`, which runs
+GoReleaser to build all six platform binaries, archive them
+(`tar.gz` for unix, `zip` for windows), generate `checksums.txt`, and
+publish a GitHub Release with auto-generated changelog.
+
+```bash
+# bump and ship
+git tag v0.1.0
+git push origin v0.1.0
+# wait ~2 min, check https://github.com/JackZhao98/robinhood-cli/releases
+```
+
+To dry-run the release process locally without publishing:
+
+```bash
+goreleaser release --snapshot --clean
+ls dist/
+```
 
 ## License
 

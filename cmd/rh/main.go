@@ -5,8 +5,13 @@ import (
 	"github.com/jackzhao/robinhood-cli/internal/output"
 )
 
+// Set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
-	if err := commands.NewRoot().Execute(); err != nil {
+	root := commands.NewRoot()
+	root.Version = version
+	if err := root.Execute(); err != nil {
 		output.Fail(err)
 	}
 }

@@ -1,0 +1,69 @@
+version: 2
+
+project_name: rh
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rh
+    main: ./cmd/rh
+    binary: rh
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Drop debug symbols to keep the binary small, inject the tag as version.
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    # rh_0.1.0_darwin_arm64.tar.gz / rh_0.1.0_windows_amd64.zip etc.
+    name_template: 'rh_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  version_template: '{{ .Tag }}-next'
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: 'v{{ .Version }}'
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore:'
+      - '^ci:'
+      - typo
