@@ -78,17 +78,17 @@ type GoldStatus struct {
 
 type goldRaw struct {
 	Results []struct {
-		ID         string `json:"id"`
-		Plan       struct {
-			Type        string `json:"type"`
-			DisplayName string `json:"display_name"`
+		ID   string `json:"id"`
+		Plan struct {
+			Type        string `json:"type"`          // e.g. "24_karat"
+			Name        string `json:"name"`          // e.g. "cc_annual_24_karat"
+			MonthlyCost string `json:"monthly_cost"`  // e.g. "4.17"
 		} `json:"plan"`
-		State        string `json:"state"`
-		StartedAt    string `json:"started_at"`
-		NextBillDate string `json:"next_bill_date"`
-		Cost         struct {
-			Amount string `json:"amount"`
-		} `json:"cost"`
+		// Robinhood exposes "status" (not "state") on the subscription.
+		Status       string `json:"status"`
+		CreatedAt    string `json:"created_at"`
+		EndedAt      *string `json:"ended_at"`
+		RenewalDate  string `json:"renewal_date"`
 	} `json:"results"`
 }
 
@@ -101,17 +101,18 @@ func (c *Client) GetGold() (*GoldStatus, error) {
 		return &GoldStatus{IsSubscribed: false}, nil
 	}
 	r := raw.Results[0]
-	tier := r.Plan.DisplayName
-	if tier == "" {
-		tier = r.Plan.Type
-	}
+	// A subscription is active when the server didn't set an end date.
+	// `status` values observed: "created", "active". Neither implies a
+	// cancelled sub on its own, so `ended_at == null` is the reliable
+	// signal.
+	active := r.EndedAt == nil || *r.EndedAt == ""
 	return &GoldStatus{
-		IsSubscribed: r.State == "active" || r.State == "subscribed",
-		Tier:         tier,
-		State:        r.State,
-		StartedAt:    r.StartedAt,
-		NextBillDate: r.NextBillDate,
-		MonthlyCost:  parseFloat(r.Cost.Amount),
+		IsSubscribed: active,
+		Tier:         r.Plan.Type,
+		State:        r.Status,
+		StartedAt:    r.CreatedAt,
+		NextBillDate: r.RenewalDate,
+		MonthlyCost:  parseFloat(r.Plan.MonthlyCost),
 	}, nil
 }
 
