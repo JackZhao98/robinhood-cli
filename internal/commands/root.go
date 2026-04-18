@@ -28,6 +28,9 @@ func NewRoot() *cobra.Command {
 		"output format: plain (YAML-like, AI-friendly) | json | table")
 
 	root.AddCommand(
+		// meta
+		newVersionCmd(),
+
 		// auth
 		newLoginCmd(),
 		newLogoutCmd(),

@@ -1,11 +1,42 @@
 package commands
 
 import (
+	"runtime"
+
 	"github.com/spf13/cobra"
 
 	"github.com/jackzhao/robinhood-cli/internal/client"
 	"github.com/jackzhao/robinhood-cli/internal/output"
 )
+
+// versionPayload is what `rh version` emits. Mirrors `rh --version` but
+// goes through the standard output formatter so JSON / table callers get
+// structured fields instead of a raw string.
+type versionPayload struct {
+	Version string `json:"version"`
+	OS      string `json:"os"`
+	Arch    string `json:"arch"`
+	Go      string `json:"go"`
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print rh version and build info",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			v := cmd.Root().Version
+			if v == "" {
+				v = "dev"
+			}
+			return output.Emit(versionPayload{
+				Version: v,
+				OS:      runtime.GOOS,
+				Arch:    runtime.GOARCH,
+				Go:      runtime.Version(),
+			})
+		},
+	}
+}
 
 func newDocumentsCmd() *cobra.Command {
 	var taxYear int
