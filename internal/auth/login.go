@@ -13,11 +13,12 @@ import (
 	"github.com/jackzhao/robinhood-cli/internal/config"
 )
 
-// Prompter abstracts how we ask the user for MFA codes / sheriff approval
-// so the auth flow can be driven from a CLI, a test, or anything else.
+// Prompter abstracts how we ask for an MFA code when Robinhood demands one,
+// and how we surface "approve on phone" status messages while we poll.
+// Sheriff approval needs no input — we just poll automatically.
 type Prompter interface {
 	PromptMFACode(mfaType string) (string, error)
-	NotifySheriff(message string) error
+	NotifySheriff(message string)
 }
 
 type tokenResponse struct {
@@ -63,7 +64,8 @@ func Login(username, password string, prompter Prompter) (*Credentials, error) {
 		return nil, err
 	}
 
-	// Sheriff verification (newer mobile-style approval flow).
+	// Sheriff verification (newer mobile-style approval flow). No human input
+	// needed — we just poll until the user taps "approve" on their phone.
 	if resp.VerificationWorkflow != nil {
 		if err := completeSheriffWorkflow(resp.VerificationWorkflow.ID, deviceToken, prompter); err != nil {
 			return nil, err
@@ -74,7 +76,8 @@ func Login(username, password string, prompter Prompter) (*Credentials, error) {
 		}
 	}
 
-	// Classic MFA challenge (TOTP / SMS code).
+	// Classic MFA challenge (TOTP / SMS 6-digit code) — needs the user to
+	// type a code that came in via SMS/authenticator app.
 	if resp.MFARequired {
 		code, err := prompter.PromptMFACode(resp.MFAType)
 		if err != nil {
@@ -186,12 +189,10 @@ func completeSheriffWorkflow(workflowID, deviceToken string, prompter Prompter) 
 		return err
 	}
 
-	if err := prompter.NotifySheriff("Approve the Robinhood login on your phone, then press Enter to continue."); err != nil {
-		return err
-	}
+	prompter.NotifySheriff("📱 Approve the Robinhood login on your phone — polling for up to 3 minutes...")
 
-	// Step 3: poll until the challenge is validated.
-	if err := pollSheriffChallenge(client, challengeID); err != nil {
+	// Step 3: poll until the challenge is validated. No human keypress needed.
+	if err := pollSheriffChallenge(client, challengeID, prompter); err != nil {
 		return err
 	}
 
@@ -260,9 +261,12 @@ func fetchSheriffChallengeID(client *http.Client, machineID string) (string, err
 	return view.TypeContext.Context.SheriffChallenge.ID, nil
 }
 
-func pollSheriffChallenge(client *http.Client, challengeID string) error {
+func pollSheriffChallenge(client *http.Client, challengeID string, prompter Prompter) error {
 	deadline := time.Now().Add(3 * time.Minute)
 	url := fmt.Sprintf("%s/push/%s/get_prompts_status/", config.APIBase, challengeID)
+	heartbeatEvery := 15 * time.Second
+	nextHeartbeat := time.Now().Add(heartbeatEvery)
+
 	for time.Now().Before(deadline) {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Accept", "application/json")
@@ -282,9 +286,16 @@ func pollSheriffChallenge(client *http.Client, challengeID string) error {
 		_ = json.Unmarshal(data, &status)
 		switch strings.ToLower(status.ChallengeStatus) {
 		case "validated":
+			prompter.NotifySheriff("✅ Approved.")
 			return nil
 		case "failed", "expired", "denied":
 			return fmt.Errorf("sheriff challenge %s", status.ChallengeStatus)
+		}
+		// Periodic heartbeat so the caller (human or AI) knows we're alive.
+		if time.Now().After(nextHeartbeat) {
+			remaining := time.Until(deadline).Round(time.Second)
+			prompter.NotifySheriff(fmt.Sprintf("   ...still waiting for phone approval (%s left)", remaining))
+			nextHeartbeat = time.Now().Add(heartbeatEvery)
 		}
 		time.Sleep(2 * time.Second)
 	}

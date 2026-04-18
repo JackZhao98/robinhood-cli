@@ -18,7 +18,7 @@ import (
 type cliPrompter struct{}
 
 func (cliPrompter) PromptMFACode(mfaType string) (string, error) {
-	fmt.Fprintf(os.Stderr, "MFA required (%s). Enter code: ", mfaType)
+	fmt.Fprintf(os.Stderr, "📩 Robinhood sent an MFA code (%s). Enter it here: ", mfaType)
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
@@ -27,11 +27,9 @@ func (cliPrompter) PromptMFACode(mfaType string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-func (cliPrompter) NotifySheriff(message string) error {
+func (cliPrompter) NotifySheriff(message string) {
+	// Always to stderr so the stdout JSON/plain payload stays clean.
 	fmt.Fprintln(os.Stderr, message)
-	reader := bufio.NewReader(os.Stdin)
-	_, err := reader.ReadString('\n')
-	return err
 }
 
 func newLoginCmd() *cobra.Command {
