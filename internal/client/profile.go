@@ -316,6 +316,25 @@ func (c *Client) GetHoldings(accountNumber string) (*HoldingsResult, error) {
 	}, nil
 }
 
+// ListAccountNumbers returns every brokerage account number visible to
+// the logged-in user (individual, IRA, etc). Used by callers that need
+// to fan out a query across all accounts (e.g. order history) because
+// most Robinhood endpoints silently default to the primary individual
+// account when no account filter is provided.
+func (c *Client) ListAccountNumbers() ([]string, error) {
+	records, err := c.listAllAccounts()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(records))
+	for _, r := range records {
+		if r.AccountNumber != "" {
+			out = append(out, r.AccountNumber)
+		}
+	}
+	return out, nil
+}
+
 func (c *Client) listAllAccounts() ([]accountRecord, error) {
 	var out []accountRecord
 	url := URL("/accounts/", map[string]string{"default_to_all_accounts": "true"})

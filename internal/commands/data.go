@@ -251,7 +251,7 @@ func newOptionHistoryCmd() *cobra.Command {
 
 func newActivityCmd() *cobra.Command {
 	var limit int
-	var since, asset string
+	var since, asset, account string
 	cmd := &cobra.Command{
 		Use:   "activity",
 		Short: "Recent buy/sell activity (equity + option orders)",
@@ -263,7 +263,7 @@ func newActivityCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := c.GetActivity(limit, since, asset)
+			res, err := c.GetActivity(limit, since, asset, account)
 			if err != nil {
 				return err
 			}
@@ -273,6 +273,7 @@ func newActivityCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 50, "max orders to return (across both asset classes)")
 	cmd.Flags().StringVar(&since, "since", "", "only orders created on/after YYYY-MM-DD")
 	cmd.Flags().StringVar(&asset, "asset", "", "filter: equity | option | crypto (default: equity+option)")
+	cmd.Flags().StringVar(&account, "account", "", "filter to a single account number (default: all accounts incl. IRA)")
 	return cmd
 }
 

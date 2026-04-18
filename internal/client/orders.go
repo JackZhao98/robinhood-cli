@@ -110,7 +110,10 @@ type optionInstrumentRaw struct {
 // most-recent first. assetFilter: "" (both) | "equity" | "option".
 // since: optional ISO date "2026-01-01" — only orders newer than this.
 // limit: maximum entries returned across both asset classes after filtering.
-func (c *Client) GetActivity(limit int, since, assetFilter string) (*ActivityResult, error) {
+// account: optional account number filter. When empty the call fans out
+// across every account the user owns (individual + IRA + …) because
+// Robinhood's order endpoints silently default to the primary account.
+func (c *Client) GetActivity(limit int, since, assetFilter, account string) (*ActivityResult, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -123,21 +126,40 @@ func (c *Client) GetActivity(limit int, since, assetFilter string) (*ActivityRes
 		sinceTime = t
 	}
 
+	// Equity + option endpoints default to the primary individual account
+	// when no account_numbers filter is passed. Fan out across all
+	// accounts so IRA orders are included. Crypto uses a separate Nummus
+	// API and is single-account by nature.
+	accounts := []string{account}
+	if account == "" && (assetFilter == "" || assetFilter == "equity" || assetFilter == "option") {
+		nums, err := c.ListAccountNumbers()
+		if err != nil {
+			return nil, err
+		}
+		if len(nums) > 0 {
+			accounts = nums
+		}
+	}
+
 	combined := []ActivityEntry{}
 
 	if assetFilter == "" || assetFilter == "equity" {
-		entries, err := c.fetchEquityOrders(limit, sinceTime)
-		if err != nil {
-			return nil, err
+		for _, acct := range accounts {
+			entries, err := c.fetchEquityOrders(limit, sinceTime, acct)
+			if err != nil {
+				return nil, err
+			}
+			combined = append(combined, entries...)
 		}
-		combined = append(combined, entries...)
 	}
 	if assetFilter == "" || assetFilter == "option" {
-		entries, err := c.fetchOptionOrders(limit, sinceTime)
-		if err != nil {
-			return nil, err
+		for _, acct := range accounts {
+			entries, err := c.fetchOptionOrders(limit, sinceTime, acct)
+			if err != nil {
+				return nil, err
+			}
+			combined = append(combined, entries...)
 		}
-		combined = append(combined, entries...)
 	}
 	if assetFilter == "crypto" {
 		entries, err := c.fetchCryptoOrders(limit, sinceTime)
@@ -163,6 +185,9 @@ func (c *Client) GetActivity(limit int, since, assetFilter string) (*ActivityRes
 	if assetFilter != "" {
 		filters["asset_class"] = assetFilter
 	}
+	if account != "" {
+		filters["account"] = account
+	}
 
 	return &ActivityResult{
 		Count:   len(combined),
@@ -171,8 +196,8 @@ func (c *Client) GetActivity(limit int, since, assetFilter string) (*ActivityRes
 	}, nil
 }
 
-func (c *Client) fetchEquityOrders(limit int, since time.Time) ([]ActivityEntry, error) {
-	raws, err := c.pageEquityOrders(limit*2, since) // fetch extra so date filter still hits limit
+func (c *Client) fetchEquityOrders(limit int, since time.Time, account string) ([]ActivityEntry, error) {
+	raws, err := c.pageEquityOrders(limit*2, since, account) // fetch extra so date filter still hits limit
 	if err != nil {
 		return nil, err
 	}
@@ -242,9 +267,13 @@ func (c *Client) fetchEquityOrders(limit int, since time.Time) ([]ActivityEntry,
 	return out, nil
 }
 
-func (c *Client) pageEquityOrders(maxRows int, since time.Time) ([]equityOrderRaw, error) {
+func (c *Client) pageEquityOrders(maxRows int, since time.Time, account string) ([]equityOrderRaw, error) {
 	out := []equityOrderRaw{}
-	url := URL("/orders/", nil)
+	q := map[string]string{}
+	if account != "" {
+		q["account_numbers"] = account
+	}
+	url := URL("/orders/", q)
 	for url != "" && len(out) < maxRows {
 		var page equityOrdersResp
 		if err := c.GetJSON(url, &page); err != nil {
@@ -272,8 +301,8 @@ func (c *Client) pageEquityOrders(maxRows int, since time.Time) ([]equityOrderRa
 	return out, nil
 }
 
-func (c *Client) fetchOptionOrders(limit int, since time.Time) ([]ActivityEntry, error) {
-	raws, err := c.pageOptionOrders(limit*2, since)
+func (c *Client) fetchOptionOrders(limit int, since time.Time, account string) ([]ActivityEntry, error) {
+	raws, err := c.pageOptionOrders(limit*2, since, account)
 	if err != nil {
 		return nil, err
 	}
@@ -385,9 +414,13 @@ func (c *Client) fetchOptionOrders(limit int, since time.Time) ([]ActivityEntry,
 	return out, nil
 }
 
-func (c *Client) pageOptionOrders(maxRows int, since time.Time) ([]optionOrderRaw, error) {
+func (c *Client) pageOptionOrders(maxRows int, since time.Time, account string) ([]optionOrderRaw, error) {
 	out := []optionOrderRaw{}
-	url := URL("/options/orders/", nil)
+	q := map[string]string{}
+	if account != "" {
+		q["account_numbers"] = account
+	}
+	url := URL("/options/orders/", q)
 	for url != "" && len(out) < maxRows {
 		var page optionOrdersResp
 		if err := c.GetJSON(url, &page); err != nil {
