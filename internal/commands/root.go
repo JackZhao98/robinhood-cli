@@ -51,7 +51,6 @@ func NewRoot() *cobra.Command {
 		// cash flows
 		newDividendsCmd(),
 		newTransfersCmd(),
-		newRecurringCmd(),
 
 		// market state
 		newMarketCmd(),

@@ -3,9 +3,9 @@ name: robinhood
 description: |
   Query Robinhood account data via the local `rh` CLI: balances, holdings,
   stock + crypto quotes, historical bars, options chains/greeks, options
-  positions, order history, dividends, ACH transfers, recurring investments,
-  earnings calendar, news, analyst ratings, watchlists, market status,
-  documents (1099), Gold/margin/PDT status. Auth is one-time `rh login`
+  positions, order history, dividends, ACH transfers, earnings calendar,
+  news, analyst ratings, watchlists, market status, documents (1099),
+  Gold/margin/PDT status. Auth is one-time `rh login`
   (pure HTTP, no browser); tokens auto-refresh. Every command prints to
   stdout (default plain/YAML; --format json | table).
 allowed-tools:
@@ -35,8 +35,6 @@ ACCOUNT / PORTFOLIO
   rh account list                           # all accounts overview, no holdings (cheap)
   rh account show <ACCOUNT>                 # holdings for one account, sorted by equity
   rh account snapshot                       # totals + every account's holdings (heavier)
-  rh account history --account X --span year [--interval day]
-                                            # equity-over-time series (P&L over time)
 
 EQUITY MARKET DATA
   rh quote <SYMBOL>                         # real-time price + fundamentals
@@ -59,7 +57,6 @@ ORDERS / ACTIVITY
 CASH FLOWS
   rh dividends [--since YYYY-MM-DD] [--limit N]
   rh transfers [--since YYYY-MM-DD] [--limit N]
-  rh recurring                              # DCA configs
 
 SYMBOL RESEARCH
   rh symbol search "company or ticker"      # find a ticker by name
@@ -95,9 +92,8 @@ ACCOUNT META
   one line per account).
 - **"What's in my Roth IRA?"** → `rh account list` to find the IRA's
   account_number, then `rh account show <that_number>`.
-- **"How is my portfolio doing this year?"** → `rh account history
-  --account <main> --span year` for the curve, plus `rh account snapshot`
-  for current state. Net change is in `net_change` and `percent_change`.
+- **"How is my portfolio doing this year?"** → `rh account snapshot`
+  (current state) combined with the P&L recipe below.
 - **"How much did I really make?"** → combine `rh account snapshot`
   (current value), `rh transfers` (sum of `net_deposited`),
   `rh dividends` (`total_paid`). True P&L = current_value - net_deposited

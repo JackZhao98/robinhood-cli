@@ -16,7 +16,7 @@ func newAccountCmd() *cobra.Command {
 		Use:   "account",
 		Short: "Account overviews and per-account holdings",
 	}
-	cmd.AddCommand(newAccountListCmd(), newAccountShowCmd(), newAccountSnapshotCmd(), newAccountHistoryCmd())
+	cmd.AddCommand(newAccountListCmd(), newAccountShowCmd(), newAccountSnapshotCmd())
 	return cmd
 }
 
@@ -73,32 +73,6 @@ func newAccountSnapshotCmd() *cobra.Command {
 			return output.Emit(res)
 		},
 	}
-}
-
-func newAccountHistoryCmd() *cobra.Command {
-	var account, span, interval string
-	cmd := &cobra.Command{
-		Use:   "history",
-		Short: "Portfolio equity over time for one account",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if account == "" {
-				return errors.New("--account is required")
-			}
-			c, err := client.New()
-			if err != nil {
-				return err
-			}
-			res, err := c.GetPortfolioHistory(account, span, interval)
-			if err != nil {
-				return err
-			}
-			return output.Emit(res)
-		},
-	}
-	cmd.Flags().StringVar(&account, "account", "", "account number (from `rh account list`)")
-	cmd.Flags().StringVar(&span, "span", "year", "day | week | month | 3month | year | 5year | all")
-	cmd.Flags().StringVar(&interval, "interval", "", "5minute | 10minute | hour | day | week (auto-picked from span)")
-	return cmd
 }
 
 // ---------- market data ----------

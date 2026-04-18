@@ -53,20 +53,3 @@ func newTransfersCmd() *cobra.Command {
 	return cmd
 }
 
-func newRecurringCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "recurring",
-		Short: "Recurring investment / DCA configurations",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := client.New()
-			if err != nil {
-				return err
-			}
-			res, err := c.GetRecurring()
-			if err != nil {
-				return err
-			}
-			return output.Emit(res)
-		},
-	}
-}

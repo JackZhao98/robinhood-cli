@@ -21,8 +21,7 @@ tokens stored locally in `~/.robinhood-cli/credentials.json`.
 - **Crypto** (Robinhood Crypto): holdings + real-time quotes
 - **Order history**: equity + option + crypto, with single-order
   per-execution drill-down
-- **Cash flows**: dividends received, ACH transfers in/out, recurring
-  investments (DCA)
+- **Cash flows**: dividends received, ACH transfers in/out
 - **Symbol research**: search by name, news, earnings, analyst ratings,
   similar stocks, sector tags, splits
 - **Market state**: open/closed status, S&P 500 movers, watchlists
@@ -103,9 +102,6 @@ rh account show <ACCOUNT_NUMBER>
 # real-time quote
 rh quote NVDA
 
-# how is my main account doing this year?
-rh account history --account <ACCT> --span year
-
 # recent buy/sell activity
 rh activity --limit 20
 
@@ -138,7 +134,6 @@ ACCOUNT
   rh account list                              # overview, no holdings
   rh account show <ACCOUNT>                    # one account, sorted by equity
   rh account snapshot                          # totals + every account's holdings
-  rh account history --account X --span year [--interval day]
 
 EQUITY MARKET DATA
   rh quote <SYMBOL>
@@ -161,7 +156,6 @@ ORDERS / ACTIVITY
 CASH FLOWS
   rh dividends [--since YYYY-MM-DD] [--limit N]
   rh transfers [--since YYYY-MM-DD] [--limit N]
-  rh recurring                      # DCA configurations
 
 SYMBOL RESEARCH
   rh symbol search "company or ticker"
@@ -266,8 +260,10 @@ The agent will call `rh` under the hood, parse the output, and summarize.
 - **Old dividend records** sometimes return without a resolvable symbol
   (Robinhood's instrument lookup may not return delisted/ancient
   instruments).
-- A few endpoints (`notifications`, `gold`, `recurring`) are best-effort
-  — Robinhood doesn't publicly document them and field names may shift.
+- A few endpoints (`notifications`, `gold`) are best-effort — Robinhood
+  doesn't publicly document them and field names may shift. Commands
+  previously included for per-account equity history and recurring DCA
+  configs were dropped after Robinhood decommissioned their endpoints.
 - Crypto only covers Robinhood Crypto holdings; if you've moved coins out
   to self-custody those are obviously invisible.
 - Pure Go, zero CGO — `GOOS=linux GOARCH=arm64 go build` and other
