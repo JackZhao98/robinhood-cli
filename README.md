@@ -1,8 +1,8 @@
 # rh — Robinhood CLI
 
 A single-binary, pure-HTTP, read-only Robinhood client. Built to be
-**driven by AI assistants** (via a Claude Code Skill) but works just as
-well as a regular terminal tool.
+**driven by AI agents** (ships with an agent-agnostic Skill file) but
+works just as well as a regular terminal tool.
 
 No browser. No Selenium. No MCP server. Log in once, then everything is
 plain HTTPS calls to Robinhood's REST endpoints with auto-refreshing OAuth
@@ -42,12 +42,16 @@ publish for `darwin/arm64`, `darwin/amd64`, `linux/arm64`, `linux/amd64`,
 
 ```bash
 # example: macOS Apple Silicon
-TAG=v0.1.0
+TAG=v1.0.1
 curl -L "https://github.com/JackZhao98/robinhood-cli/releases/download/${TAG}/rh_${TAG#v}_darwin_arm64.tar.gz" \
   | tar -xz -C ~/.local/bin rh
 chmod +x ~/.local/bin/rh
 rh --version
 ```
+
+Replace `darwin_arm64` with the matching slug for your platform:
+`darwin_amd64`, `linux_arm64`, `linux_amd64`, `windows_arm64.zip`,
+`windows_amd64.zip`.
 
 ### Option 2: build from source (Go ≥ 1.25)
 
@@ -65,19 +69,22 @@ Make sure `~/.local/bin` is on your `PATH`.
 rh login
 ```
 
-You'll be prompted for username/password. Robinhood may then either:
+You'll be prompted for username/password. Robinhood will then trigger
+one of two challenges:
 
-- Send a **push notification to your phone** (Sheriff verification) —
-  approve it, then press Enter in the terminal.
-- Ask for a **6-digit MFA code** from SMS or your authenticator app.
+- **Push notification to your phone** (Sheriff verification) — `rh` polls
+  automatically every 2 s for up to 3 min, with a heartbeat to stderr
+  every 15 s. Just tap "Approve" on your phone; no Enter needed.
+- **6-digit MFA code** from SMS or your authenticator app — `rh` waits
+  for you to type it.
 
 Tokens are stored at `~/.robinhood-cli/credentials.json` (chmod 600).
 The `device_token` is persisted at `~/.robinhood-cli/device_token` so
-Robinhood treats this machine as a known device on subsequent logins.
+Robinhood treats this machine as a known device on subsequent logins
+(usually no Sheriff push from then on).
 
-`rh logout` clears stored credentials.
-
-You can also pass credentials non-interactively via env vars:
+`rh logout` clears stored credentials. Username/password can also be
+fed via env vars:
 
 ```bash
 ROBINHOOD_USERNAME=you@example.com ROBINHOOD_PASSWORD=secret rh login
@@ -263,8 +270,8 @@ The agent will call `rh` under the hood, parse the output, and summarize.
   — Robinhood doesn't publicly document them and field names may shift.
 - Crypto only covers Robinhood Crypto holdings; if you've moved coins out
   to self-custody those are obviously invisible.
-- macOS-only build instructions above; the Go source has no platform
-  dependencies, so `GOOS=linux go build` etc. work fine.
+- Pure Go, zero CGO — `GOOS=linux GOARCH=arm64 go build` and other
+  cross-compiles work without any extra toolchain.
 
 ## Releasing (maintainer notes)
 
@@ -275,10 +282,15 @@ publish a GitHub Release with auto-generated changelog.
 
 ```bash
 # bump and ship
-git tag v0.1.0
-git push origin v0.1.0
-# wait ~2 min, check https://github.com/JackZhao98/robinhood-cli/releases
+git tag v1.0.2
+git push origin v1.0.2
+# wait ~3 min, check https://github.com/JackZhao98/robinhood-cli/releases
 ```
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) prefixes
+(`feat:`, `fix:`, `docs:`, `chore:`, `ci:`) so the auto-generated
+changelog groups things sensibly. `docs:` / `chore:` / `ci:` commits are
+filtered out of release notes by `.goreleaser.yaml`.
 
 To dry-run the release process locally without publishing:
 
