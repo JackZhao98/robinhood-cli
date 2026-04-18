@@ -1,0 +1,23 @@
+# Build output
+/rh
+/rh-*
+/dist/
+/build/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local-only state from harness / observers
+.observer.lock
+.claude/
+
+# Credentials live in ~/.robinhood-cli/, NEVER inside the repo — these
+# entries are belt-and-suspenders in case anyone copies them in by mistake.
+credentials.json
+device_token
+*.env
+.env
+.env.*
