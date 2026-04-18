@@ -205,22 +205,27 @@ rh account show "$IRA" --format json | jq '.holdings[:5]'
 rh activity --limit 200 --format json | jq '.orders[] | select(.symbol=="NVDA")'
 ```
 
-## Use as an AI Skill (Claude Code)
+## Use as an AI agent skill
 
-The repo ships a ready-to-install Skill at
-[`skills/robinhood/SKILL.md`](skills/robinhood/SKILL.md). Drop it into
-your Claude Code skills directory:
+The repo ships a ready-to-install Skill file at
+[`skills/robinhood/SKILL.md`](skills/robinhood/SKILL.md), in the standard
+Skills format (YAML frontmatter + Markdown body). It works with any
+agent app that supports the spec — drop it into wherever your app reads
+skills from.
+
+For example, with Claude Code:
 
 ```bash
 mkdir -p ~/.claude/skills/robinhood
 cp skills/robinhood/SKILL.md ~/.claude/skills/robinhood/SKILL.md
 ```
 
-That's it — next Claude Code session, the `robinhood` skill will appear
-in the skills list and Claude will know how to drive `rh`. No other
-config needed (the skill only declares `Bash` as an allowed tool).
+Other agent harnesses (Cursor, OpenCode, custom agent SDKs, etc.) read
+skills from their own paths — consult your agent's docs for where to
+drop the file. The skill itself is agent-agnostic: it only declares
+`Bash` as an allowed tool and tells the agent how to call `rh`.
 
-Once installed, ask Claude things like:
+Once installed, ask the agent things like:
 
 - "How much do I have across all my Robinhood accounts?"
 - "What's in my Roth IRA?"
@@ -229,10 +234,10 @@ Once installed, ask Claude things like:
 - "What's BTC at right now?"
 - "Find the ticker for SoFi and pull the latest news."
 
-Claude will call `rh` under the hood, parse the output, and summarize.
+The agent will call `rh` under the hood, parse the output, and summarize.
 
-> The skill assumes `rh` is on `PATH`. If `command -v rh` fails inside a
-> Claude session, either rebuild `~/.local/bin/rh` (see Install above) or
+> The skill assumes `rh` is on `PATH`. If `command -v rh` fails inside the
+> agent session, either rebuild `~/.local/bin/rh` (see Install above) or
 > drop the absolute path into the skill file.
 
 ## How it works
