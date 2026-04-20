@@ -70,6 +70,7 @@ func NewRoot() *cobra.Command {
 		// orders
 		newActivityCmd(),
 		newOrderCmd(),
+		newTradeCmd(),
 
 		// hidden legacy aliases
 		newLegacyProfileCmd(),

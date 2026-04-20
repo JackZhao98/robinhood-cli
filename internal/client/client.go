@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,6 +79,43 @@ func (c *Client) GetJSON(fullURL string, dest any) error {
 		return fmt.Errorf("decode %s: %w (body=%s)", fullURL, err, truncate(body, 300))
 	}
 	return nil
+}
+
+// PostJSON performs an authenticated POST with a JSON payload.
+// Returns the HTTP status code and decodes the response body into dest (if non-nil).
+// Unlike GetJSON, this does NOT treat 4xx as a Go error — the caller decides,
+// because trade endpoints return structured validation errors that the caller
+// wants to surface to the user verbatim.
+func (c *Client) PostJSON(fullURL string, payload, dest any) (int, error) {
+	if err := c.ensureFresh(); err != nil {
+		return 0, err
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, fmt.Errorf("marshal payload: %w", err)
+	}
+	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	c.applyHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, err
+	}
+	if dest != nil && len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, dest); err != nil {
+			return resp.StatusCode, fmt.Errorf("decode %s: %w (body=%s)", fullURL, err, truncate(respBody, 500))
+		}
+	}
+	return resp.StatusCode, nil
 }
 
 // GetJSONUnauth is for endpoints that work without a bearer (instruments, chains).
