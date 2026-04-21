@@ -1,8 +1,7 @@
 # rh — Robinhood CLI
 
-A single-binary, pure-HTTP, read-only Robinhood client. Built to be
-**driven by AI agents** (ships with an agent-agnostic Skill file) but
-works just as well as a regular terminal tool.
+A single-binary, pure-HTTP, read-only Robinhood client for terminal use,
+scripts, and automation.
 
 No browser. No Selenium. No MCP server. Log in once, then everything is
 plain HTTPS calls to Robinhood's REST endpoints with auto-refreshing OAuth
@@ -27,8 +26,8 @@ tokens stored locally in `~/.robinhood-cli/credentials.json`.
 - **Market state**: open/closed status, S&P 500 movers, watchlists
 - **Account meta**: tax documents (1099), Gold subscription, margin
   balances, PDT status, notifications inbox
-- **Three output formats**: `plain` (YAML-like, AI-friendly default),
-  `json`, `table`
+- **Three output formats**: `table` (human-friendly default), `plain`
+  (YAML-like, AI-friendly), `json`
 
 ## Install
 
@@ -114,13 +113,14 @@ rh dividends
 ## Output formats
 
 ```
---format plain   default — YAML-like indented key/value, AI-friendly
+--format table   default — ASCII table for human terminal use
+--format plain   YAML-like indented key/value, AI-friendly
 --format json    pretty-printed JSON for scripts / jq pipelines
---format table   ASCII table; for nested data, falls back to plain
 ```
 
 ```bash
-rh quote NVDA --format table
+rh quote NVDA
+rh quote NVDA --format plain
 rh activity --limit 5 --format json | jq '.orders[] | .symbol'
 ```
 
@@ -205,41 +205,6 @@ rh account show "$IRA" --format json | jq '.holdings[:5]'
 ```bash
 rh activity --limit 200 --format json | jq '.orders[] | select(.symbol=="NVDA")'
 ```
-
-## Use as an AI agent skill
-
-The repo ships a ready-to-install Skill file at
-[`skills/robinhood/SKILL.md`](skills/robinhood/SKILL.md), in the standard
-Skills format (YAML frontmatter + Markdown body). It works with any
-agent app that supports the spec — drop it into wherever your app reads
-skills from.
-
-For example, with Claude Code:
-
-```bash
-mkdir -p ~/.claude/skills/robinhood
-cp skills/robinhood/SKILL.md ~/.claude/skills/robinhood/SKILL.md
-```
-
-Other agent harnesses (Cursor, OpenCode, custom agent SDKs, etc.) read
-skills from their own paths — consult your agent's docs for where to
-drop the file. The skill itself is agent-agnostic: it only declares
-`Bash` as an allowed tool and tells the agent how to call `rh`.
-
-Once installed, ask the agent things like:
-
-- "How much do I have across all my Robinhood accounts?"
-- "What's in my Roth IRA?"
-- "How is my portfolio doing this year? How does that compare to my
-  net deposits?"
-- "What's BTC at right now?"
-- "Find the ticker for SoFi and pull the latest news."
-
-The agent will call `rh` under the hood, parse the output, and summarize.
-
-> The skill assumes `rh` is on `PATH`. If `command -v rh` fails inside the
-> agent session, either rebuild `~/.local/bin/rh` (see Install above) or
-> drop the absolute path into the skill file.
 
 ## How it works
 
