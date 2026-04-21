@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jackzhao/robinhood-cli/internal/audit"
 	"github.com/jackzhao/robinhood-cli/internal/client"
 	"github.com/jackzhao/robinhood-cli/internal/config"
 	"github.com/jackzhao/robinhood-cli/internal/output"
@@ -300,6 +301,23 @@ func runTrade(action, symbol, amountStr string, f tradeFlags) error {
 	placed, err := c.PlaceEquityOrder(req)
 	if err != nil {
 		return err
+	}
+
+	// Audit: append trade record to ~/.config/rh/trades.jsonl.
+	if err := audit.Trade(audit.TradeRecord{
+		OrderID:  placed.ID,
+		Account:  f.account,
+		Symbol:   symbol,
+		Side:     action,
+		Type:     ifStr(f.limit > 0, "LMT", "MKT"),
+		TIF:      strings.ToUpper(tif),
+		Shares:   strconv.FormatFloat(sharesF, 'f', -1, 64),
+		Price:    strconv.FormatFloat(refPrice, 'f', 4, 64),
+		Notional: strconv.FormatFloat(dollarAmt, 'f', 2, 64),
+		State:    placed.State,
+		Notes:    f.notes,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: trades.jsonl append failed: %v\n", err)
 	}
 
 	// Append to tradebook CSV.
