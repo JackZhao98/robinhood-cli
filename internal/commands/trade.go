@@ -10,20 +10,19 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jackzhao/robinhood-cli/internal/client"
+	"github.com/jackzhao/robinhood-cli/internal/config"
 	"github.com/jackzhao/robinhood-cli/internal/output"
 	"github.com/jackzhao/robinhood-cli/internal/tradebook"
 )
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Safety limits (hard-coded — no flag override).
+//  Safety limits are loaded from ~/.config/rh/risk.json (see config.LoadRisk).
+//  Account numbers remain hard-coded — they aren't safety caps.
 // ─────────────────────────────────────────────────────────────────────────
 
 const (
-	maxSingleOrderUSD  = 5000.0
-	maxDailyTotalUSD   = 10000.0
-	maxHourlyOrderCnt  = 5
-	defaultAccountNum  = "597357623" // Trading (individual margin)
-	rothAccountNum     = "647360304"
+	defaultAccountNum = "597357623" // Trading (individual margin)
+	rothAccountNum    = "647360304"
 )
 
 // acctShort returns the short label used in trades.csv for a given account num.
@@ -182,6 +181,11 @@ func runTrade(action, symbol, amountStr string, f tradeFlags) error {
 		tif = "gfd"
 	}
 
+	risk, err := config.LoadRisk()
+	if err != nil {
+		return fmt.Errorf("risk config: %w", err)
+	}
+
 	c, err := client.New()
 	if err != nil {
 		return err
@@ -229,16 +233,16 @@ func runTrade(action, symbol, amountStr string, f tradeFlags) error {
 	if err != nil {
 		return err
 	}
-	if dollarAmt > maxSingleOrderUSD {
-		return fmt.Errorf("order $%.2f exceeds single-order cap $%.0f", dollarAmt, maxSingleOrderUSD)
+	if dollarAmt > risk.MaxSingleOrder {
+		return fmt.Errorf("order $%.2f exceeds single-order cap $%.0f", dollarAmt, risk.MaxSingleOrder)
 	}
-	if f.execute && dailyUsed+dollarAmt > maxDailyTotalUSD {
+	if f.execute && dailyUsed+dollarAmt > risk.MaxDailyTotal {
 		return fmt.Errorf("would exceed daily cap: used $%.2f + $%.2f > $%.0f",
-			dailyUsed, dollarAmt, maxDailyTotalUSD)
+			dailyUsed, dollarAmt, risk.MaxDailyTotal)
 	}
-	if f.execute && hourlyCnt >= maxHourlyOrderCnt {
+	if f.execute && hourlyCnt >= risk.MaxHourlyOrders {
 		return fmt.Errorf("hourly order count %d has hit cap %d — wait before next order",
-			hourlyCnt, maxHourlyOrderCnt)
+			hourlyCnt, risk.MaxHourlyOrders)
 	}
 
 	preview := tradePreview{
@@ -254,9 +258,9 @@ func runTrade(action, symbol, amountStr string, f tradeFlags) error {
 		Ask:           ask,
 		Last:          last,
 		DailyUsed:     dailyUsed,
-		DailyLimit:    maxDailyTotalUSD,
+		DailyLimit:    risk.MaxDailyTotal,
 		HourlyCount:   hourlyCnt,
-		HourlyLimit:   maxHourlyOrderCnt,
+		HourlyLimit:   risk.MaxHourlyOrders,
 		Mode:          ifStr(f.execute, "EXECUTE", "PREVIEW-ONLY"),
 	}
 
