@@ -6,10 +6,15 @@ import (
 
 type Quote struct {
 	Symbol             string   `json:"symbol"`
+	CurrentPrice       *float64 `json:"current_price,omitempty"`
 	LastPrice          *float64 `json:"last_price"`
 	ExtendedHoursPrice *float64 `json:"extended_hours_price"`
 	Bid                *float64 `json:"bid"`
 	Ask                *float64 `json:"ask"`
+	PreviousClose      *float64 `json:"previous_close,omitempty"`
+	PreviousCloseDate  string   `json:"previous_close_date,omitempty"`
+	DayChange          *float64 `json:"day_change,omitempty"`
+	DayChangePct       *float64 `json:"day_change_pct,omitempty"`
 	Is247Eligible      bool     `json:"is_24_7_eligible"`
 	MarketCap          *float64 `json:"market_cap"`
 	PERatio            *float64 `json:"pe_ratio"`
@@ -42,13 +47,16 @@ type instrumentsResp struct {
 }
 
 type fullQuote struct {
-	Symbol                       string `json:"symbol"`
-	LastTradePrice               string `json:"last_trade_price"`
-	LastExtendedHoursTradePrice  string `json:"last_extended_hours_trade_price"`
-	BidPrice                     string `json:"bid_price"`
-	AskPrice                     string `json:"ask_price"`
-	Is247Eligible                bool   `json:"is_24_7_eligible"`
-	UpdatedAt                    string `json:"updated_at"`
+	Symbol                      string `json:"symbol"`
+	LastTradePrice              string `json:"last_trade_price"`
+	LastExtendedHoursTradePrice string `json:"last_extended_hours_trade_price"`
+	BidPrice                    string `json:"bid_price"`
+	AskPrice                    string `json:"ask_price"`
+	PreviousClose               string `json:"previous_close"`
+	PreviousCloseDate           string `json:"previous_close_date"`
+	AdjustedPreviousClose       string `json:"adjusted_previous_close"`
+	Is247Eligible               bool   `json:"is_24_7_eligible"`
+	UpdatedAt                   string `json:"updated_at"`
 }
 
 type fundamentals struct {
@@ -119,12 +127,24 @@ func (c *Client) GetQuote(symbol string) (*Quote, error) {
 		fr.Low52Weeks = f.Results[0].Low52Weeks
 	}
 
+	currentPrice := optFloat(r.LastTradePrice)
+	if v := optFloat(r.LastExtendedHoursTradePrice); v != nil && *v > 0 {
+		currentPrice = v
+	}
+	previousClose := optFloat(r.PreviousClose)
+	if previousClose == nil {
+		previousClose = optFloat(r.AdjustedPreviousClose)
+	}
+
 	q0 := &Quote{
 		Symbol:                symbol,
+		CurrentPrice:          currentPrice,
 		LastPrice:             optFloat(r.LastTradePrice),
 		ExtendedHoursPrice:    optFloat(r.LastExtendedHoursTradePrice),
 		Bid:                   optFloat(r.BidPrice),
 		Ask:                   optFloat(r.AskPrice),
+		PreviousClose:         previousClose,
+		PreviousCloseDate:     r.PreviousCloseDate,
 		Is247Eligible:         r.Is247Eligible,
 		MarketCap:             optFloat(fr.MarketCap),
 		PERatio:               optFloat(fr.PERatio),
@@ -140,6 +160,12 @@ func (c *Client) GetQuote(symbol string) (*Quote, error) {
 		High52Weeks:           optFloat(fr.High52Weeks),
 		Low52Weeks:            optFloat(fr.Low52Weeks),
 		UpdatedAt:             r.UpdatedAt,
+	}
+	if q0.CurrentPrice != nil && q0.PreviousClose != nil && *q0.PreviousClose != 0 {
+		change := *q0.CurrentPrice - *q0.PreviousClose
+		changePct := (change / *q0.PreviousClose) * 100
+		q0.DayChange = &change
+		q0.DayChangePct = &changePct
 	}
 	// When upstream dividend_yield is null but we can infer an annualized
 	// yield from per-share distribution × known frequency, surface it as

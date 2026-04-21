@@ -54,8 +54,8 @@ func NewRoot() *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().StringVarP(&formatStr, "format", "f", "plain",
-		"output format: plain (YAML-like, AI-friendly) | json | table")
+	root.PersistentFlags().StringVarP(&formatStr, "format", "f", "table",
+		"output format: table (human default) | plain (AI-friendly) | json")
 
 	root.AddCommand(
 		// meta
