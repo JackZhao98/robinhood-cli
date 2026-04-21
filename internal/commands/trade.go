@@ -113,10 +113,13 @@ func newTradeSellCmd() *cobra.Command {
 
 func newTradeCancelCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "cancel ORDER_ID",
-		Short: "Cancel an open/queued order",
+		Use:   "cancel ORDER_UUID",
+		Short: "Cancel an open/queued order (UUID from `rh activity`)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateOrderID(args[0]); err != nil {
+				return err
+			}
 			c, err := client.New()
 			if err != nil {
 				return err

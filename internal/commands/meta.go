@@ -136,10 +136,13 @@ func newNotificationsCmd() *cobra.Command {
 
 func newOrderCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "order ID",
-		Short: "Single equity order with per-execution detail",
+		Use:   "order UUID",
+		Short: "Single equity order by UUID (use `rh activity` to list order IDs)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateOrderID(args[0]); err != nil {
+				return err
+			}
 			c, err := client.New()
 			if err != nil {
 				return err
