@@ -1,10 +1,28 @@
 package commands
 
 import (
+	"os"
+	"time"
+
 	"github.com/spf13/cobra"
 
+	"github.com/jackzhao/robinhood-cli/internal/audit"
 	"github.com/jackzhao/robinhood-cli/internal/output"
 )
+
+// cmdStart captures the start time of the root command so PersistentPostRun
+// can record command duration in audit.jsonl. Single-process CLI → safe.
+var cmdStart time.Time
+
+// skipAuditFirstArg lists argv[1] values that should NOT produce an
+// audit.jsonl line (help/completion scaffolding is pure noise).
+func skipAuditFirstArg(arg string) bool {
+	switch arg {
+	case "completion", "help", "--help", "-h":
+		return true
+	}
+	return false
+}
 
 func NewRoot() *cobra.Command {
 	var formatStr string
@@ -15,12 +33,24 @@ func NewRoot() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmdStart = time.Now()
 			f, err := output.ParseFormat(formatStr)
 			if err != nil {
 				return err
 			}
 			output.CurrentFormat = f
 			return nil
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			// cobra PostRun only fires on success (exit 0).
+			if len(os.Args) <= 1 || skipAuditFirstArg(os.Args[1]) {
+				return
+			}
+			_ = audit.Command(audit.CommandRecord{
+				Argv:     os.Args,
+				ExitCode: 0,
+				DurMs:    time.Since(cmdStart).Milliseconds(),
+			})
 		},
 	}
 
