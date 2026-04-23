@@ -17,14 +17,15 @@ type Holding struct {
 }
 
 type AccountSummary struct {
-	AccountNumber       string    `json:"account_number"`
-	BrokerageAccountType string   `json:"brokerage_account_type,omitempty"`
-	AccountType         string    `json:"account_type,omitempty"`
-	Nickname            string    `json:"nickname,omitempty"`
-	PortfolioValue      float64   `json:"portfolio_value"`
-	Cash                float64   `json:"cash"`
-	BuyingPower         float64   `json:"buying_power"`
-	Holdings            []Holding `json:"holdings"`
+	AccountNumber        string    `json:"account_number"`
+	BrokerageAccountType string    `json:"brokerage_account_type,omitempty"`
+	ManagementType       string    `json:"management_type,omitempty"`
+	AccountType          string    `json:"account_type,omitempty"`
+	Nickname             string    `json:"nickname,omitempty"`
+	PortfolioValue       float64   `json:"portfolio_value"`
+	Cash                 float64   `json:"cash"`
+	BuyingPower          float64   `json:"buying_power"`
+	Holdings             []Holding `json:"holdings"`
 }
 
 type Profile struct {
@@ -47,6 +48,7 @@ type accountRecord struct {
 	AccountNumber        string `json:"account_number"`
 	Type                 string `json:"type"` // "cash" / "margin"
 	BrokerageAccountType string `json:"brokerage_account_type"`
+	ManagementType       string `json:"management_type"`
 	Nickname             string `json:"nickname"`
 	PortfolioCash        string `json:"portfolio_cash"`
 	Cash                 string `json:"cash"`
@@ -88,6 +90,18 @@ type quoteRecord struct {
 
 type quotesResp struct {
 	Results []*quoteRecord `json:"results"`
+}
+
+type bonfireAccountSwitcherResp struct {
+	Accounts []struct {
+		Identifier           string `json:"identifier"`
+		IdentifierType       string `json:"identifier_type"`
+		BrokerageAccountType string `json:"brokerage_account_type"`
+		ManagementType       string `json:"management_type"`
+		PrimaryText          string `json:"primary_text"`
+		ExpandedPrimaryText  string `json:"expanded_primary_text"`
+		SecondaryText        string `json:"secondary_text"`
+	} `json:"accounts"`
 }
 
 func (c *Client) GetProfile() (*Profile, error) {
@@ -177,6 +191,7 @@ func (c *Client) GetProfile() (*Profile, error) {
 		summaries = append(summaries, AccountSummary{
 			AccountNumber:        a.AccountNumber,
 			BrokerageAccountType: a.BrokerageAccountType,
+			ManagementType:       a.ManagementType,
 			AccountType:          a.Type,
 			Nickname:             a.Nickname,
 			PortfolioValue:       equity,
@@ -224,6 +239,7 @@ func (c *Client) GetAccountsSummary() (*Profile, error) {
 		summaries = append(summaries, AccountSummary{
 			AccountNumber:        a.AccountNumber,
 			BrokerageAccountType: a.BrokerageAccountType,
+			ManagementType:       a.ManagementType,
 			AccountType:          a.Type,
 			Nickname:             a.Nickname,
 			PortfolioValue:       equity,
@@ -345,6 +361,68 @@ func (c *Client) listAllAccounts() ([]accountRecord, error) {
 		}
 		out = append(out, page.Results...)
 		url = page.Next
+	}
+	byNumber := make(map[string]int, len(out))
+	for i, acc := range out {
+		if acc.AccountNumber == "" {
+			continue
+		}
+		byNumber[acc.AccountNumber] = i
+	}
+
+	discovered, err := c.listBonfireAccounts()
+	if err != nil {
+		return out, nil // best-effort supplement; never break normal account flows
+	}
+	for _, discoveredAcc := range discovered {
+		if discoveredAcc.AccountNumber == "" {
+			continue
+		}
+		if idx, ok := byNumber[discoveredAcc.AccountNumber]; ok {
+			if out[idx].Nickname == "" && discoveredAcc.Nickname != "" {
+				out[idx].Nickname = discoveredAcc.Nickname
+			}
+			if out[idx].ManagementType == "" && discoveredAcc.ManagementType != "" {
+				out[idx].ManagementType = discoveredAcc.ManagementType
+			}
+			continue
+		}
+		out = append(out, discoveredAcc)
+		byNumber[discoveredAcc.AccountNumber] = len(out) - 1
+	}
+	return out, nil
+}
+
+func (c *Client) listBonfireAccounts() ([]accountRecord, error) {
+	var resp bonfireAccountSwitcherResp
+	if err := c.GetJSON("https://bonfire.robinhood.com/home/account_switcher/v2", &resp); err != nil {
+		return nil, err
+	}
+	out := make([]accountRecord, 0, len(resp.Accounts))
+	for _, item := range resp.Accounts {
+		if item.IdentifierType != "account_number" || item.Identifier == "" {
+			continue
+		}
+		var detail accountRecord
+		if err := c.GetJSON(URL("/accounts/"+item.Identifier+"/", nil), &detail); err != nil {
+			continue
+		}
+		if detail.AccountNumber == "" {
+			detail.AccountNumber = item.Identifier
+		}
+		if detail.BrokerageAccountType == "" {
+			detail.BrokerageAccountType = item.BrokerageAccountType
+		}
+		if detail.ManagementType == "" {
+			detail.ManagementType = item.ManagementType
+		}
+		if detail.Nickname == "" {
+			detail.Nickname = strings.TrimSpace(item.ExpandedPrimaryText)
+			if detail.Nickname == "" {
+				detail.Nickname = strings.TrimSpace(item.PrimaryText)
+			}
+		}
+		out = append(out, detail)
 	}
 	return out, nil
 }
