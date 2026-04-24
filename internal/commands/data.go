@@ -79,19 +79,29 @@ func newAccountSnapshotCmd() *cobra.Command {
 
 func newQuoteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "quote SYMBOL",
-		Short: "Real-time quote and fundamentals for a symbol",
-		Args:  cobra.ExactArgs(1),
+		Use:   "quote SYMBOL [SYMBOL ...]",
+		Short: "Real-time quote and fundamentals for one or many symbols (batched to 3 HTTP calls total)",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := client.New()
 			if err != nil {
 				return err
 			}
-			res, err := c.GetQuote(args[0])
+			if len(args) == 1 {
+				res, err := c.GetQuote(args[0])
+				if err != nil {
+					return err
+				}
+				return output.Emit(res)
+			}
+			res, err := c.GetQuotes(args)
 			if err != nil {
 				return err
 			}
-			return output.Emit(res)
+			return output.Emit(map[string]any{
+				"count":  len(res),
+				"quotes": res,
+			})
 		},
 	}
 }

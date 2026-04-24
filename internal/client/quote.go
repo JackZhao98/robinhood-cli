@@ -77,106 +77,190 @@ type fundamentals struct {
 	} `json:"results"`
 }
 
+type fundamentalsRow struct {
+	MarketCap             string
+	PERatio               string
+	DividendYield         string
+	DividendPerShare      string
+	DistributionFrequency string
+	ExDividendDate        string
+	Volume                string
+	AverageVolume         string
+	High                  string
+	Low                   string
+	Open                  string
+	High52Weeks           string
+	Low52Weeks            string
+}
+
 func (c *Client) GetQuote(symbol string) (*Quote, error) {
-	symbol = strings.ToUpper(symbol)
+	qs, err := c.GetQuotes([]string{symbol})
+	if err != nil {
+		return nil, err
+	}
+	if len(qs) == 0 {
+		return nil, errMsg("symbol not found: " + strings.ToUpper(symbol))
+	}
+	return &qs[0], nil
+}
+
+// GetQuotes fetches real-time quotes + fundamentals for N symbols in 3 API
+// calls total (instruments / marketdata quotes / fundamentals) instead of 3N.
+// Preserves input order; drops symbols the upstream doesn't resolve.
+func (c *Client) GetQuotes(symbols []string) ([]Quote, error) {
+	if len(symbols) == 0 {
+		return nil, errMsg("no symbols provided")
+	}
+	upper := make([]string, 0, len(symbols))
+	seen := make(map[string]bool, len(symbols))
+	for _, s := range symbols {
+		u := strings.ToUpper(strings.TrimSpace(s))
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		upper = append(upper, u)
+	}
+	joined := strings.Join(upper, ",")
 
 	var instr instrumentsResp
-	if err := c.GetJSON(URL("/instruments/", map[string]string{"symbols": symbol}), &instr); err != nil {
+	if err := c.GetJSON(URL("/instruments/", map[string]string{"symbols": joined}), &instr); err != nil {
 		return nil, err
 	}
 	if len(instr.Results) == 0 {
-		return nil, errMsg("symbol not found: " + symbol)
+		return nil, errMsg("no symbols resolved: " + joined)
 	}
-	id := instr.Results[0].ID
+	instrBySym := make(map[string]string, len(instr.Results))
+	ids := make([]string, 0, len(instr.Results))
+	resolved := make([]string, 0, len(instr.Results))
+	for _, it := range instr.Results {
+		sym := strings.ToUpper(it.Symbol)
+		instrBySym[sym] = it.ID
+		ids = append(ids, it.ID)
+		resolved = append(resolved, sym)
+	}
 
 	var q struct {
 		Results []fullQuote `json:"results"`
 	}
 	if err := c.GetJSON(URL("/marketdata/quotes/", map[string]string{
 		"bounds": "24_5",
-		"ids":    id,
+		"ids":    strings.Join(ids, ","),
 	}), &q); err != nil {
 		return nil, err
 	}
-	if len(q.Results) == 0 {
-		return nil, errMsg("no quote returned")
+	quoteBySym := make(map[string]fullQuote, len(q.Results))
+	for _, r := range q.Results {
+		quoteBySym[strings.ToUpper(r.Symbol)] = r
 	}
-	r := q.Results[0]
 
 	var f fundamentals
-	if err := c.GetJSON(URL("/fundamentals/", map[string]string{"symbols": symbol}), &f); err != nil {
+	if err := c.GetJSON(URL("/fundamentals/", map[string]string{"symbols": strings.Join(resolved, ",")}), &f); err != nil {
 		return nil, err
 	}
-	var fr struct {
-		MarketCap, PERatio, DividendYield, DividendPerShare, DistributionFrequency, ExDividendDate,
-		Volume, AverageVolume, High, Low, Open, High52Weeks, Low52Weeks string
-	}
-	if len(f.Results) > 0 {
-		fr.MarketCap = f.Results[0].MarketCap
-		fr.PERatio = f.Results[0].PERatio
-		fr.DividendYield = f.Results[0].DividendYield
-		fr.DividendPerShare = f.Results[0].DividendPerShare
-		fr.DistributionFrequency = f.Results[0].DistributionFrequency
-		fr.ExDividendDate = f.Results[0].ExDividendDate
-		fr.Volume = f.Results[0].Volume
-		fr.AverageVolume = f.Results[0].AverageVolume
-		fr.High = f.Results[0].High
-		fr.Low = f.Results[0].Low
-		fr.Open = f.Results[0].Open
-		fr.High52Weeks = f.Results[0].High52Weeks
-		fr.Low52Weeks = f.Results[0].Low52Weeks
-	}
+	fundBySym := mapFundamentalsByResolvedOrder(f, resolved)
 
-	currentPrice := optFloat(r.LastTradePrice)
-	if v := optFloat(r.LastExtendedHoursTradePrice); v != nil && *v > 0 {
-		currentPrice = v
-	}
-	previousClose := optFloat(r.PreviousClose)
-	if previousClose == nil {
-		previousClose = optFloat(r.AdjustedPreviousClose)
-	}
+	out := make([]Quote, 0, len(upper))
+	for _, sym := range upper {
+		if _, ok := instrBySym[sym]; !ok {
+			continue
+		}
+		r, ok := quoteBySym[sym]
+		if !ok {
+			continue
+		}
+		fr, hasFund := fundBySym[sym]
 
-	q0 := &Quote{
-		Symbol:                symbol,
-		CurrentPrice:          currentPrice,
-		LastPrice:             optFloat(r.LastTradePrice),
-		ExtendedHoursPrice:    optFloat(r.LastExtendedHoursTradePrice),
-		Bid:                   optFloat(r.BidPrice),
-		Ask:                   optFloat(r.AskPrice),
-		PreviousClose:         previousClose,
-		PreviousCloseDate:     r.PreviousCloseDate,
-		Is247Eligible:         r.Is247Eligible,
-		MarketCap:             optFloat(fr.MarketCap),
-		PERatio:               optFloat(fr.PERatio),
-		DividendYield:         optFloat(fr.DividendYield),
-		DividendPerShare:      optFloat(fr.DividendPerShare),
-		DistributionFrequency: fr.DistributionFrequency,
-		ExDividendDate:        fr.ExDividendDate,
-		Volume:                optFloat(fr.Volume),
-		AverageVolume:         optFloat(fr.AverageVolume),
-		High:                  optFloat(fr.High),
-		Low:                   optFloat(fr.Low),
-		Open:                  optFloat(fr.Open),
-		High52Weeks:           optFloat(fr.High52Weeks),
-		Low52Weeks:            optFloat(fr.Low52Weeks),
-		UpdatedAt:             r.UpdatedAt,
+		currentPrice := optFloat(r.LastTradePrice)
+		if v := optFloat(r.LastExtendedHoursTradePrice); v != nil && *v > 0 {
+			currentPrice = v
+		}
+		previousClose := optFloat(r.PreviousClose)
+		if previousClose == nil {
+			previousClose = optFloat(r.AdjustedPreviousClose)
+		}
+
+		q0 := Quote{
+			Symbol:                sym,
+			CurrentPrice:          currentPrice,
+			LastPrice:             optFloat(r.LastTradePrice),
+			ExtendedHoursPrice:    optFloat(r.LastExtendedHoursTradePrice),
+			Bid:                   optFloat(r.BidPrice),
+			Ask:                   optFloat(r.AskPrice),
+			PreviousClose:         previousClose,
+			PreviousCloseDate:     r.PreviousCloseDate,
+			Is247Eligible:         r.Is247Eligible,
+			MarketCap:             optFloat(fr.MarketCap),
+			PERatio:               optFloat(fr.PERatio),
+			DividendYield:         optFloat(fr.DividendYield),
+			DividendPerShare:      optFloat(fr.DividendPerShare),
+			DistributionFrequency: fr.DistributionFrequency,
+			ExDividendDate:        fr.ExDividendDate,
+			Volume:                optFloat(fr.Volume),
+			AverageVolume:         optFloat(fr.AverageVolume),
+			High:                  optFloat(fr.High),
+			Low:                   optFloat(fr.Low),
+			Open:                  optFloat(fr.Open),
+			High52Weeks:           optFloat(fr.High52Weeks),
+			Low52Weeks:            optFloat(fr.Low52Weeks),
+			UpdatedAt:             r.UpdatedAt,
+		}
+		if !hasFund {
+			q0.MarketCap = nil
+			q0.PERatio = nil
+			q0.DividendYield = nil
+			q0.DividendPerShare = nil
+			q0.DistributionFrequency = ""
+			q0.ExDividendDate = ""
+			q0.Volume = nil
+			q0.AverageVolume = nil
+			q0.High = nil
+			q0.Low = nil
+			q0.Open = nil
+			q0.High52Weeks = nil
+			q0.Low52Weeks = nil
+		}
+		if q0.CurrentPrice != nil && q0.PreviousClose != nil && *q0.PreviousClose != 0 {
+			change := *q0.CurrentPrice - *q0.PreviousClose
+			changePct := (change / *q0.PreviousClose) * 100
+			q0.DayChange = &change
+			q0.DayChangePct = &changePct
+		}
+		if q0.DividendYield == nil && q0.DividendPerShare != nil && q0.LastPrice != nil && *q0.LastPrice > 0 {
+			if mult := frequencyMultiplier(fr.DistributionFrequency); mult > 0 {
+				est := (*q0.DividendPerShare) * mult / (*q0.LastPrice) * 100
+				q0.DividendYieldEstimate = &est
+			}
+		}
+		out = append(out, q0)
 	}
-	if q0.CurrentPrice != nil && q0.PreviousClose != nil && *q0.PreviousClose != 0 {
-		change := *q0.CurrentPrice - *q0.PreviousClose
-		changePct := (change / *q0.PreviousClose) * 100
-		q0.DayChange = &change
-		q0.DayChangePct = &changePct
-	}
-	// When upstream dividend_yield is null but we can infer an annualized
-	// yield from per-share distribution × known frequency, surface it as
-	// dividend_yield_estimate so callers aren't left staring at a null.
-	if q0.DividendYield == nil && q0.DividendPerShare != nil && q0.LastPrice != nil && *q0.LastPrice > 0 {
-		if mult := frequencyMultiplier(fr.DistributionFrequency); mult > 0 {
-			est := (*q0.DividendPerShare) * mult / (*q0.LastPrice) * 100
-			q0.DividendYieldEstimate = &est
+	return out, nil
+}
+
+func mapFundamentalsByResolvedOrder(f fundamentals, resolved []string) map[string]fundamentalsRow {
+	out := make(map[string]fundamentalsRow, len(f.Results))
+	for i, sym := range resolved {
+		if i >= len(f.Results) {
+			break
+		}
+		row := f.Results[i]
+		out[sym] = fundamentalsRow{
+			MarketCap:             row.MarketCap,
+			PERatio:               row.PERatio,
+			DividendYield:         row.DividendYield,
+			DividendPerShare:      row.DividendPerShare,
+			DistributionFrequency: row.DistributionFrequency,
+			ExDividendDate:        row.ExDividendDate,
+			Volume:                row.Volume,
+			AverageVolume:         row.AverageVolume,
+			High:                  row.High,
+			Low:                   row.Low,
+			Open:                  row.Open,
+			High52Weeks:           row.High52Weeks,
+			Low52Weeks:            row.Low52Weeks,
 		}
 	}
-	return q0, nil
+	return out
 }
 
 // frequencyMultiplier maps Robinhood's distribution_frequency strings to

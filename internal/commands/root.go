@@ -90,6 +90,7 @@ func NewRoot() *cobra.Command {
 		newMoversCmd(),
 		newWatchlistCmd(),
 		newIndexCmd(),
+		newScanCmd(),
 
 		// account meta
 		newDocumentsCmd(),
