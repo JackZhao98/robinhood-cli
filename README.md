@@ -1,25 +1,27 @@
 # rh — Robinhood CLI
 
-A single-binary, pure-HTTP, read-only Robinhood client for terminal use,
-scripts, and automation.
+A single-binary, pure-HTTP Robinhood client for terminal use, scripts, and
+automation.
 
 No browser. No Selenium. No MCP server. Log in once, then everything is
 plain HTTPS calls to Robinhood's REST endpoints with auto-refreshing OAuth
 tokens stored locally in `~/.robinhood-cli/credentials.json`.
 
-> **Read-only by design.** This tool will never place, modify, or cancel a
-> trade. It only fetches data.
+> **HTTP-only by design.** No browser, no Selenium, no Robinhood app
+> automation. Market data, account queries, and guarded real equity order
+> workflows all go through Robinhood's HTTPS APIs.
 
 ## Features
 
 - **All accounts**: Individual, Roth IRA, Traditional IRA, Robinhood
-  Strategies (Managed) — totals, cash, holdings, equity history
+  Strategies (Managed) — totals, cash, holdings
 - **Equity market data**: real-time quotes, fundamentals, OHLCV bars
 - **Options**: expirations, full chain with greeks/IV/bid-ask, current
   positions, single-contract price history
 - **Crypto** (Robinhood Crypto): holdings + real-time quotes
 - **Order history**: equity + option + crypto, with single-order
   per-execution drill-down
+- **Real equity trading**: preview / submit / cancel guarded equity orders
 - **Cash flows**: dividends received, ACH transfers in/out
 - **Symbol research**: search by name, news, earnings, analyst ratings,
   similar stocks, sector tags, splits
@@ -51,7 +53,13 @@ Replace `darwin_arm64` with the matching slug for your platform:
 `darwin_amd64`, `linux_arm64`, `linux_amd64`, `windows_arm64.zip`,
 `windows_amd64.zip`.
 
-### Option 2: build from source (Go ≥ 1.25)
+### Option 2: install with Go (Go ≥ 1.25)
+
+```bash
+go install github.com/jackzhao/robinhood-cli/cmd/rh@latest
+```
+
+### Option 3: build from source (Go ≥ 1.25)
 
 ```bash
 git clone https://github.com/JackZhao98/robinhood-cli ~/Developer/Robinhood/robinhood-cli
@@ -152,6 +160,7 @@ CRYPTO
 ORDERS / ACTIVITY
   rh activity [--limit N] [--since YYYY-MM-DD] [--asset equity|option|crypto]
   rh order <ID>                     # one order with executions[]
+  rh trade buy|sell|cancel ...      # preview / submit / cancel real equity orders
 
 CASH FLOWS
   rh dividends [--since YYYY-MM-DD] [--limit N]
@@ -169,6 +178,8 @@ SYMBOL RESEARCH
 MARKET STATE
   rh market                         # open/closed + today's hours
   rh movers --direction up|down     # S&P 500 top gainers/losers
+  rh index ...                      # market indexes (VIX, etc.)
+  rh scan ...                       # Bonfire screener
   rh watchlist list / show NAME
 
 ACCOUNT META
@@ -177,6 +188,9 @@ ACCOUNT META
   rh margin                         # margin balances per account
   rh pdt                            # day-trade count + PDT status
   rh notifications [--limit N]
+META
+  rh version
+
 ```
 
 `rh --help` lists everything. `rh <command> --help` shows flags.
@@ -221,7 +235,8 @@ rh activity --limit 200 --format json | jq '.orders[] | select(.symbol=="NVDA")'
 
 ## Limitations / known issues
 
-- **Read-only**. By design — no order placement.
+- Real trading is limited to guarded **equity** orders via `rh trade`.
+- Options / crypto remain read-only.
 - **Old dividend records** sometimes return without a resolvable symbol
   (Robinhood's instrument lookup may not return delisted/ancient
   instruments).
