@@ -15,33 +15,77 @@ Do not use it as the primary handler for portfolio-wide diagnosis, strategy
 planning, paper trading, or sync orchestration; let the `cfo` skill lead those
 flows and call `rh` only when needed.
 
-## Install
+## Setup
 
-`rh` can be installed in either of these ways:
+Before running any `rh` command, make sure the binary is on PATH. Install it
+yourself if it isn't — the binary persists across runs once it lands in
+`~/.local/bin`.
+
+```bash
+if ! command -v rh >/dev/null 2>&1; then
+  TAG=v1.0.1
+  PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')          # linux | darwin
+  ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL "https://github.com/JackZhao98/robinhood-cli/releases/download/${TAG}/rh_${TAG#v}_${PLATFORM}_${ARCH}.tar.gz" \
+    | tar -xz -C "$HOME/.local/bin" rh
+  chmod +x "$HOME/.local/bin/rh"
+fi
+
+rh version
+```
+
+If you have Go available and prefer building from source:
 
 ```bash
 go install github.com/jackzhao/robinhood-cli/cmd/rh@latest
 ```
 
-```bash
-TAG=v1.0.1
-curl -L "https://github.com/JackZhao98/robinhood-cli/releases/download/${TAG}/rh_${TAG#v}_linux_arm64.tar.gz" \
-  | tar -xz -C ~/.local/bin rh
-chmod +x ~/.local/bin/rh
-```
-
-After install:
-
-```bash
-rh version
-```
+Skip the install entirely once `command -v rh` succeeds.
 
 ## Authentication
 
-- Credentials live in `~/.robinhood-cli/credentials.json`.
-- If the user is not logged in, tell them to run `rh login` themselves.
-- Do not run `rh login` inside the agent session.
-- `rh logout` clears local credentials.
+Credentials live in `~/.robinhood-cli/credentials.json` and persist across
+runs once written, so login is a one-time setup per host.
+
+`rh login` reads `ROBINHOOD_USERNAME` and `ROBINHOOD_PASSWORD` from the
+environment when those flags aren't passed. **Always use the env vars** —
+do not prompt the user for credentials in chat, do not pass them on the
+command line (they'd land in shell history).
+
+Before the first command in any run, ensure you're authenticated:
+
+```bash
+# Probe — succeeds quickly when a valid credentials file exists.
+if ! rh account list --format plain >/dev/null 2>&1; then
+  if [ -z "$ROBINHOOD_USERNAME" ] || [ -z "$ROBINHOOD_PASSWORD" ]; then
+    echo "ERROR: Robinhood credentials are not configured." >&2
+    echo "Set ROBINHOOD_USERNAME and ROBINHOOD_PASSWORD as environment" >&2
+    echo "variables (per-app or per-user). Once set, this skill will" >&2
+    echo "log in automatically on first use and persist the session." >&2
+    exit 1
+  fi
+  rh login
+fi
+```
+
+What this does:
+- If there's a valid credential file, the probe succeeds and we skip
+  login entirely — no extra round-trip per run.
+- If there's no credential file and the env vars are set, `rh login`
+  uses them and writes the credential file. Subsequent runs hit the
+  fast path above.
+- If there's no credential file **and** the env vars are missing, fail
+  loudly with an actionable message — do not try to "make do" with
+  partial auth, and do not ask the user to type a password into chat.
+
+Notes:
+- Robinhood may issue an MFA challenge during the first `rh login`. In a
+  chat session this is fine — the prompt surfaces to the user and they
+  reply with the code. In a scheduled / webhook run there's no human, so
+  the first authentication must be primed from a chat session before
+  switching the app to unattended mode.
+- `rh logout` clears the local credential file. Don't run it implicitly.
 
 ## Output format
 
