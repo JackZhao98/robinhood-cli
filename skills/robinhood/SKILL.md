@@ -194,6 +194,28 @@ Trading rules:
 - `rh trade` currently supports real equity orders only.
 - Options and crypto are data-only here.
 
+#### `--account` parameter (gotcha — bit us 2026-04-30)
+
+`rh trade --account` accepts a **numeric Robinhood account_number only**, not
+nicknames or aliases used by sibling tools (e.g., cfo's `rh-individual` /
+`rh-roth` are NOT valid here).
+
+| ❌ WRONG (rejected with HTTP 404 at execute) | ✅ RIGHT |
+|---|---|
+| `rh trade buy VOO 900 --account rh-individual` | `rh trade buy VOO 900` (Trading is the default) |
+| `rh trade buy VOO 900 --account rh-roth`       | `rh trade buy VOO 900 --account 647360304` |
+
+Rules of thumb:
+- The default account when `--account` is omitted is the **Trading
+  individual margin** account (currently `597357623` — confirm via `rh accounts`).
+- For any non-default account (Roth, managed, etc.), pass the
+  **numeric account_number from `rh accounts`**.
+- **Sneaky failure mode**: `rh trade buy ... --account <bad-alias>` (without
+  `--execute`) succeeds at preview because the alias is treated as an
+  opaque string. The 404 only fires when `--execute` actually hits the
+  Robinhood API. Always sanity-check the printed `account` row in the
+  preview matches the intended target before adding `--execute`.
+
 ## Working style
 
 - Use the smallest command that answers the question.
