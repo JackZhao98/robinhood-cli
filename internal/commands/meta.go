@@ -12,11 +12,42 @@ import (
 // versionPayload is what `rh version` emits. Mirrors `rh --version` but
 // goes through the standard output formatter so JSON / table callers get
 // structured fields instead of a raw string.
+//
+// Version, Commit, and BuiltAt are populated via SetBuildInfo from main.go,
+// where they're injected at build time by the Makefile using -ldflags.
+// When the binary is built without ldflags (e.g. `go run`), they default
+// to "dev" / "unknown" so the output is still meaningful.
 type versionPayload struct {
 	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	BuiltAt string `json:"built_at"`
 	OS      string `json:"os"`
 	Arch    string `json:"arch"`
 	Go      string `json:"go"`
+}
+
+// Build info populated by main.go (which receives values from -ldflags).
+// Lives in this package so the version command can read them without
+// leaking the main package's internal state.
+var (
+	buildVersion = "dev"
+	buildCommit  = "unknown"
+	buildBuiltAt = "unknown"
+)
+
+// SetBuildInfo is called from main.main with the ldflags-injected values.
+// It's a function (not exported package vars set directly) so the API
+// stays stable if we later swap to debug.ReadBuildInfo or another source.
+func SetBuildInfo(version, commit, builtAt string) {
+	if version != "" {
+		buildVersion = version
+	}
+	if commit != "" {
+		buildCommit = commit
+	}
+	if builtAt != "" {
+		buildBuiltAt = builtAt
+	}
 }
 
 func newVersionCmd() *cobra.Command {
@@ -26,10 +57,12 @@ func newVersionCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			v := cmd.Root().Version
 			if v == "" {
-				v = "dev"
+				v = buildVersion
 			}
 			return output.Emit(versionPayload{
 				Version: v,
+				Commit:  buildCommit,
+				BuiltAt: buildBuiltAt,
 				OS:      runtime.GOOS,
 				Arch:    runtime.GOARCH,
 				Go:      runtime.Version(),

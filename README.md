@@ -64,10 +64,37 @@ go install github.com/jackzhao/robinhood-cli/cmd/rh@latest
 ```bash
 git clone https://github.com/JackZhao98/robinhood-cli ~/Developer/Robinhood/robinhood-cli
 cd ~/Developer/Robinhood/robinhood-cli
-go build -o ~/.local/bin/rh ./cmd/rh
+make install            # → ~/.local/bin/rh, version-stamped
 ```
 
+`make install` injects `git describe --tags --dirty` + commit short SHA +
+UTC build time into the binary so `rh version` always tells the truth:
+
+```
+$ rh version
+arch      : arm64
+built_at  : 2026-04-30T18:50:37Z
+commit    : c0199c6
+go        : go1.25.0
+os        : darwin
+version   : v1.2.0-16-gc0199c6
+```
+
+A plain `go build -o ~/.local/bin/rh ./cmd/rh` still works but produces
+`version=dev` / `commit=unknown`. Prefer `make install` so you can pin
+which build is on which machine.
+
 Make sure `~/.local/bin` is on your `PATH`.
+
+### Cutting a release
+
+```bash
+make release NEW_VERSION=v1.2.1   # tags + pushes; refuses if dirty/unpushed
+make install                       # rebuild + install the tagged binary
+```
+
+`make release` also runs `go test -race ./...` first; if anything fails
+the tag is not created.
 
 ## First login
 

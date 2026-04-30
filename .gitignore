@@ -3,6 +3,7 @@
 /rh-*
 /dist/
 /build/
+/bin/
 
 # Editor / OS
 .DS_Store
