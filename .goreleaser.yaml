@@ -15,24 +15,28 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
-    # Drop debug symbols to keep the binary small, inject the tag as version.
+    flags:
+      - -trimpath
+    # Drop debug symbols to keep the binary small, inject build metadata
+    # so `rh version` reports tag + short commit + UTC build time.
+    # Matches the three vars in cmd/rh/main.go (version, commit, builtAt).
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - -s -w
+      - -X main.version=v{{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.builtAt={{ .Date }}
 
 archives:
   - id: default
-    # rh_0.1.0_darwin_arm64.tar.gz / rh_0.1.0_windows_amd64.zip etc.
+    # rh_1.2.1_darwin_arm64.tar.gz etc. GoReleaser's `.Version` template
+    # var strips the leading "v" by convention; we keep that to stay
+    # compatible with the assets already published in GitHub Releases.
     name_template: 'rh_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     formats:
       - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
     files:
       - README.md
       - LICENSE*

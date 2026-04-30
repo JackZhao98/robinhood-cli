@@ -60,6 +60,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(
 		// meta
 		newVersionCmd(),
+		newUpdateCmd(),
 
 		// auth
 		newLoginCmd(),
